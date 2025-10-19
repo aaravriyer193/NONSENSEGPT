@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NonSense GPT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: 'Ubuntu', sans-serif;
+        }
+
+        /* Custom scrollbar for a cleaner look */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Loading animation styles */
+        .loader {
+            display: none; /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        #spinner-spiral {
+            animation: spin 1.5s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        
+        /* Styles for markdown-rendered content */
+        .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+            font-weight: bold;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .markdown-content h1 { font-size: 1.5em; }
+        .markdown-content h2 { font-size: 1.25em; }
+        .markdown-content p { margin-bottom: 0.5rem; }
+        .markdown-content ul, .markdown-content ol {
+            padding-left: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .markdown-content li { list-style: revert; }
+        .markdown-content pre {
+            background-color: #f3f4f6;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+        .markdown-content code {
+            background-color: #f3f4f6;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+        }
+         .markdown-content pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+    </style>
+</head>
+<body class="bg-white text-black">
+
+    <div class="flex h-screen w-screen">
+        <!-- Sidebar -->
+        <aside class="w-1/4 max-w-[300px] bg-gray-50 border-r border-black p-4 flex flex-col hidden sm:flex">
+            <h1 class="text-2xl font-bold border-b border-black pb-2">NonSense GPT</h1>
+            <p class="text-xs text-gray-600 mt-2 italic">"The best people are never satisfied with their work!"</p>
+            <h2 class="text-lg font-bold mt-6 mb-2">Saved Sessions</h2>
+            <div class="flex-grow custom-scrollbar overflow-y-auto">
+                <!-- This is where saved chat sessions would be listed. -->
+                <div class="text-gray-500 text-sm">Your saved chats will appear here.</div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="flex-1 flex flex-col h-screen p-4">
+            <!-- Header for mobile -->
+            <div class="sm:hidden pb-4 border-b border-black">
+                 <h1 class="text-2xl font-bold">NonSense GPT</h1>
+                 <p class="text-xs text-gray-600 mt-1 italic">"The best people are never satisfied with their work!"</p>
+            </div>
+
+            <div id="chat-container" class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-4">
+                <!-- Chat messages will be appended here -->
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loader" class="loader p-4">
+                <div class="loading-animation">
+                     <svg id="spinner-svg" width="40" height="40" viewbox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" transform-origin="center">
+                        <defs>
+                            <path id="spiral-path" d="M 50,50 m 0,-15 a 15,15 0 1,1 0,30 a 15,15 0 1,1 0,-30 m 0,5 a 10,10 0 1,1 0,20 a 10,10 0 1,1 0,-20" stroke="black" stroke-width="8" fill="none" stroke-linecap="round"></path>
+                            <path id="question-path" d="M35 30 C35 15 65 15 65 40 C65 55 50 50 50 65 M50 80 a 5 5 0 1 1 0.001 0" stroke="black" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+                        </defs>
+                        <use id="spinner-spiral" href="#spiral-path" style="display: block; transform-origin: center;"></use>
+                        <use id="spinner-question" href="#question-path" style="display: none; transform-origin: center;"></use>
+                    </svg>
+                </div>
+                <p class="text-gray-500">nonsense takes time to think off...</p>
+            </div>
+
+
+            <!-- Input Form -->
+            <div class="mt-4 border-t border-black pt-4">
+                <form id="chat-form" class="flex items-center space-x-2">
+                    <input type="text" id="message-input" placeholder="It'll reply in a way hopefully..." class="flex-1 p-3 border border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition">
+                    <button type="submit" class="bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800 transition duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                        ➤
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        // Use the latest client version for compatibility
+        import { client } from "https://cdn.jsdelivr.net/npm/@gradio/client@latest/dist/index.min.js";
+
+        const chatForm = document.getElementById('chat-form');
+        const messageInput = document.getElementById('message-input');
+        const chatContainer = document.getElementById('chat-container');
+        const loader = document.getElementById('loader');
+        const spinnerSpiral = document.getElementById('spinner-spiral');
+        const spinnerQuestion = document.getElementById('spinner-question');
+        const spinnerSvg = document.getElementById('spinner-svg');
+
+
+        let chatHistory = [];
+        let app;
+
+        // --- Core Functions ---
+
+        async function connectToApi() {
+            try {
+                // Connect to the Hugging Face Space
+                app = await client("https://aaravriyer193-nonsensegpt.hf.space/");
+                console.log("Successfully connected to Hugging Face space.");
+            } catch (error) {
+                console.error("Failed to connect to Hugging Face space:", error);
+                addMessageToHistory("system", "Error: Could not connect to the backend service. Please refresh and try again.");
+            }
+        }
+        
+        function renderChatHistory() {
+            chatContainer.innerHTML = '';
+            chatHistory.forEach(msg => {
+                const messageElement = createMessageElement(msg.sender, msg.text);
+                chatContainer.appendChild(messageElement);
+            });
+            scrollToBottom();
+        }
+
+        function createMessageElement(sender, text) {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.classList.add('flex', 'flex-col', sender === 'user' ? 'items-end' : 'items-start');
+            
+            const messageBubble = document.createElement('div');
+            messageBubble.classList.add('max-w-xl', 'p-3', 'rounded-lg');
+            
+            if (sender === 'user') {
+                messageBubble.classList.add('bg-black', 'text-white');
+                messageBubble.textContent = text;
+            } else { // Handles 'bot' and 'system' messages
+                messageBubble.classList.add('bg-gray-100', 'text-black', 'border', 'border-gray-300');
+                // Use marked.js to render bot responses as markdown
+                messageBubble.innerHTML = marked.parse(text);
+                messageBubble.classList.add('markdown-content');
+            }
+            
+            messageWrapper.appendChild(messageBubble);
+            return messageWrapper;
+        }
+
+        async function handleFormSubmit(event) {
+            event.preventDefault();
+            const messageText = messageInput.value.trim();
+
+            if (!messageText) return;
+            if (!app) {
+                addMessageToHistory("system", "Backend is not connected. Please wait or refresh.");
+                return;
+            }
+
+            // Add user message to UI and history
+            addMessageToHistory('user', messageText);
+            messageInput.value = '';
+            
+            showLoader();
+
+            try {
+                // Call the API
+                const result = await app.predict(0, [
+                    messageText,
+                ]);
+
+                // The result.data[0] is the entire chat history, which is an array of [user, bot] message pairs.
+                const fullHistory = result.data[0];
+                // Get the last pair from the history.
+                const latestTurn = fullHistory[fullHistory.length - 1];
+                // The bot's response is the second item in that pair.
+                const botResponse = latestTurn[1];
+
+                addMessageToHistory('bot', botResponse);
+            } catch (error) {
+                console.error("API call failed:", error);
+                addMessageToHistory('system', "Sorry, something went wrong while getting a response.");
+            } finally {
+                hideLoader();
+            }
+        }
+
+        function addMessageToHistory(sender, text) {
+            chatHistory.push({ sender, text });
+            const messageElement = createMessageElement(sender, text);
+            chatContainer.appendChild(messageElement);
+            saveChatHistory();
+            scrollToBottom();
+        }
+        
+        // --- Utility Functions ---
+
+        function showLoader() {
+            let animationStep = 0;
+            loader.style.display = 'flex';
+            
+            // Reset to initial state
+            spinnerSpiral.style.display = 'block';
+            spinnerQuestion.style.display = 'none';
+
+            // Simple animation sequence based on your sketch
+            clearInterval(window.loaderInterval);
+            window.loaderInterval = setInterval(() => {
+                animationStep = (animationStep + 1) % 4; // Cycle through 4 steps
+                 if (animationStep < 2) { // Steps 0, 1: Spiral
+                    spinnerSpiral.style.display = 'block';
+                    spinnerQuestion.style.display = 'none';
+                } else { // Steps 2, 3: Question Mark
+                    spinnerSpiral.style.display = 'none';
+                    spinnerQuestion.style.display = 'block';
+                }
+            }, 800); // Change icon every 800ms
+            
+            scrollToBottom();
+        }
+
+        function hideLoader() {
+            clearInterval(window.loaderInterval);
+            loader.style.display = 'none';
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function saveChatHistory() {
+            localStorage.setItem('nonsenseGptChatHistory', JSON.stringify(chatHistory));
+        }
+
+        function loadChatHistory() {
+            const savedHistory = localStorage.getItem('nonsenseGptChatHistory');
+            if (savedHistory) {
+                chatHistory = JSON.parse(savedHistory);
+            } else {
+                // Add initial message if there's no history
+                 chatHistory = [{ sender: 'bot', text: 'Hi, r u ready?' }];
+            }
+        }
+
+        // --- Initialization ---
+
+        function initializeApp() {
+            chatForm.addEventListener('submit', handleFormSubmit);
+            loadChatHistory();
+            renderChatHistory();
+            connectToApi();
+            
+            // Set marked options for security and compatibility
+            marked.setOptions({
+              breaks: true, // Add <br> on a single line break
+              gfm: true, // Use GitHub Flavored Markdown
+            });
+        }
+        
+        initializeApp();
+
+    </script>
+</body>
+</html>
+
