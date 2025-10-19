@@ -82,6 +82,22 @@
             background-color: transparent;
             padding: 0;
         }
+        .session-item {
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .session-item:hover {
+            background-color: #e5e7eb;
+        }
+        .session-item.active {
+            background-color: #d1d5db;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body class="bg-white text-black">
@@ -89,12 +105,14 @@
     <div class="flex h-screen w-screen">
         <!-- Sidebar -->
         <aside class="w-1/4 max-w-[300px] bg-gray-50 border-r border-black p-4 flex flex-col hidden sm:flex">
-            <h1 class="text-2xl font-bold border-b border-black pb-2">NonSense GPT</h1>
+            <div class="flex justify-between items-center border-b border-black pb-2">
+                <h1 class="text-2xl font-bold">NonSense GPT</h1>
+                <button id="new-chat-btn" title="New Chat" class="text-2xl hover:bg-gray-200 rounded-md p-1">＋</button>
+            </div>
             <p class="text-xs text-gray-600 mt-2 italic">"The best people are never satisfied with their work!"</p>
             <h2 class="text-lg font-bold mt-6 mb-2">Saved Sessions</h2>
-            <div class="flex-grow custom-scrollbar overflow-y-auto">
-                <!-- This is where saved chat sessions would be listed. -->
-                <div class="text-gray-500 text-sm">Your saved chats will appear here.</div>
+            <div id="sessions-list" class="flex-grow custom-scrollbar overflow-y-auto pr-2">
+                <!-- Session list will be populated here -->
             </div>
         </aside>
 
@@ -146,19 +164,20 @@
         const messageInput = document.getElementById('message-input');
         const chatContainer = document.getElementById('chat-container');
         const loader = document.getElementById('loader');
+        const sessionsList = document.getElementById('sessions-list');
+        const newChatBtn = document.getElementById('new-chat-btn');
         const spinnerSpiral = document.getElementById('spinner-spiral');
         const spinnerQuestion = document.getElementById('spinner-question');
-        const spinnerSvg = document.getElementById('spinner-svg');
-
 
         let chatHistory = [];
+        let sessions = {};
+        let currentSessionId = null;
         let app;
 
         // --- Core Functions ---
 
         async function connectToApi() {
             try {
-                // Connect to the Hugging Face Space
                 app = await client("https://aaravriyer193-nonsensegpt.hf.space/");
                 console.log("Successfully connected to Hugging Face space.");
             } catch (error) {
@@ -188,12 +207,11 @@
                 messageBubble.textContent = text;
             } else { // Handles 'bot' and 'system' messages
                 messageBubble.classList.add('bg-gray-100', 'text-black', 'border', 'border-gray-300');
-                // Use marked.js to render bot responses as markdown
-                messageBubble.innerHTML = marked.parse(text);
+                messageBubble.innerHTML = marked.parse(String(text || '')); // Ensure text is a string
                 messageBubble.classList.add('markdown-content');
             }
             
-            messageWrapper.appendChild(messageBubble);
+            messageWrapper.appendChild(messageBubble); // Corrected this line
             return messageWrapper;
         }
 
@@ -207,25 +225,16 @@
                 return;
             }
 
-            // Add user message to UI and history
             addMessageToHistory('user', messageText);
             messageInput.value = '';
             
             showLoader();
 
             try {
-                // Call the API
-                const result = await app.predict(0, [
-                    messageText,
-                ]);
-
-                // The result.data[0] is the entire chat history, which is an array of [user, bot] message pairs.
+                const result = await app.predict(0, [messageText]);
                 const fullHistory = result.data[0];
-                // Get the last pair from the history.
                 const latestTurn = fullHistory[fullHistory.length - 1];
-                // The bot's response is the second item in that pair.
                 const botResponse = latestTurn[1];
-
                 addMessageToHistory('bot', botResponse);
             } catch (error) {
                 console.error("API call failed:", error);
@@ -237,35 +246,102 @@
 
         function addMessageToHistory(sender, text) {
             chatHistory.push({ sender, text });
-            const messageElement = createMessageElement(sender, text);
-            chatContainer.appendChild(messageElement);
-            saveChatHistory();
-            scrollToBottom();
+            saveCurrentSession();
+            renderChatHistory(); // Re-render the whole chat
         }
         
+        // --- Session Management ---
+
+        function startNewSession() {
+            const newSessionId = `session_${Date.now()}`;
+            currentSessionId = newSessionId;
+            chatHistory = [{ sender: 'bot', text: 'Hi, r u ready?' }];
+            sessions[currentSessionId] = chatHistory;
+            saveSessions();
+            renderSessionsList();
+            renderChatHistory();
+        }
+        
+        function switchSession(sessionId) {
+            if (sessionId === currentSessionId) return;
+            currentSessionId = sessionId;
+            loadChatHistory();
+            renderChatHistory();
+            renderSessionsList(); // To update active highlight
+        }
+        
+        function renderSessionsList() {
+            sessionsList.innerHTML = '';
+            const sortedSessions = Object.keys(sessions).sort((a, b) => b.split('_')[1] - a.split('_')[1]);
+
+            if (sortedSessions.length === 0) {
+                 sessionsList.innerHTML = `<div class="text-gray-500 text-sm">Your saved chats will appear here.</div>`;
+                 return;
+            }
+
+            sortedSessions.forEach(sessionId => {
+                const sessionHistory = sessions[sessionId];
+                const firstUserMessage = sessionHistory.find(m => m.sender === 'user');
+                const title = firstUserMessage ? firstUserMessage.text : "New Chat";
+
+                const sessionItem = document.createElement('div');
+                sessionItem.className = 'session-item';
+                sessionItem.textContent = title;
+                sessionItem.dataset.sessionId = sessionId;
+
+                if (sessionId === currentSessionId) {
+                    sessionItem.classList.add('active');
+                }
+
+                sessionItem.addEventListener('click', () => switchSession(sessionId));
+                sessionsList.appendChild(sessionItem);
+            });
+        }
+
+        function saveCurrentSession() {
+            if (currentSessionId) {
+                sessions[currentSessionId] = chatHistory;
+                saveSessions();
+                renderSessionsList(); // Update title if first message was just sent
+            }
+        }
+
+        function saveSessions() {
+            localStorage.setItem('nonsenseGptSessions', JSON.stringify(sessions));
+            localStorage.setItem('nonsenseGptLastSessionId', currentSessionId);
+        }
+
+        function loadSessions() {
+            const savedSessions = localStorage.getItem('nonsenseGptSessions');
+            if (savedSessions) {
+                sessions = JSON.parse(savedSessions);
+            }
+            currentSessionId = localStorage.getItem('nonsenseGptLastSessionId');
+            
+            // If no sessions or the last session ID is invalid, start a new one.
+            if (!currentSessionId || !sessions[currentSessionId]) {
+                 startNewSession();
+            } else {
+                 loadChatHistory();
+            }
+        }
+        
+        function loadChatHistory() {
+            chatHistory = sessions[currentSessionId] || [];
+        }
+
+
         // --- Utility Functions ---
 
         function showLoader() {
             let animationStep = 0;
             loader.style.display = 'flex';
-            
-            // Reset to initial state
-            spinnerSpiral.style.display = 'block';
-            spinnerQuestion.style.display = 'none';
-
-            // Simple animation sequence based on your sketch
             clearInterval(window.loaderInterval);
             window.loaderInterval = setInterval(() => {
-                animationStep = (animationStep + 1) % 4; // Cycle through 4 steps
-                 if (animationStep < 2) { // Steps 0, 1: Spiral
-                    spinnerSpiral.style.display = 'block';
-                    spinnerQuestion.style.display = 'none';
-                } else { // Steps 2, 3: Question Mark
-                    spinnerSpiral.style.display = 'none';
-                    spinnerQuestion.style.display = 'block';
-                }
-            }, 800); // Change icon every 800ms
-            
+                animationStep = (animationStep + 1) % 4;
+                spinnerSpiral.style.display = animationStep < 2 ? 'block' : 'none';
+                spinnerQuestion.style.display = animationStep >= 2 ? 'block' : 'none';
+            }, 800);
             scrollToBottom();
         }
 
@@ -278,32 +354,20 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        function saveChatHistory() {
-            localStorage.setItem('nonsenseGptChatHistory', JSON.stringify(chatHistory));
-        }
-
-        function loadChatHistory() {
-            const savedHistory = localStorage.getItem('nonsenseGptChatHistory');
-            if (savedHistory) {
-                chatHistory = JSON.parse(savedHistory);
-            } else {
-                // Add initial message if there's no history
-                 chatHistory = [{ sender: 'bot', text: 'Hi, r u ready?' }];
-            }
-        }
-
         // --- Initialization ---
 
         function initializeApp() {
             chatForm.addEventListener('submit', handleFormSubmit);
-            loadChatHistory();
+            newChatBtn.addEventListener('click', startNewSession);
+
+            loadSessions();
+            renderSessionsList();
             renderChatHistory();
             connectToApi();
             
-            // Set marked options for security and compatibility
             marked.setOptions({
-              breaks: true, // Add <br> on a single line break
-              gfm: true, // Use GitHub Flavored Markdown
+              breaks: true,
+              gfm: true,
             });
         }
         
